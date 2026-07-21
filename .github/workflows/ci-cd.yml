@@ -1,0 +1,61 @@
+name: CI/CD Pipeline
+
+# Runs on every push and pull request to the main branch
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # ---------- 1. BUILD & TEST ----------
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run automated tests
+        run: pytest tests/ -v
+
+      - name: Validate HTML exists
+        run: |
+          test -f index.html && echo "index.html found"
+          test -f Dockerfile && echo "Dockerfile found"
+
+  # ---------- 2. BUILD DOCKER IMAGE ----------
+  docker-build:
+    needs: build-and-test          # only runs if tests pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t ci-cd-pipeline-app:${{ github.sha }} .
+
+      - name: Verify image was created
+        run: docker images | grep ci-cd-pipeline-app
+
+  # ---------- 3. DEPLOY (simulated) ----------
+  deploy:
+    needs: docker-build            # only runs if the image builds
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'   # deploy only from main
+    steps:
+      - name: Deploy to server
+        run: |
+          echo "Deploying ci-cd-pipeline-app:${{ github.sha }} to AWS EC2..."
+          echo "In production this step would SSH to the EC2 host and run:"
+          echo "  docker pull <registry>/ci-cd-pipeline-app:${{ github.sha }}"
+          echo "  docker stop app || true"
+          echo "  docker run -d --name app -p 80:80 ci-cd-pipeline-app:${{ github.sha }}"
+          echo "Deployment step completed."
